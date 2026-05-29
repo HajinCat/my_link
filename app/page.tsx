@@ -1,5 +1,5 @@
 import { Metadata } from "next"
-import { LinkList } from "@/components/LinkList"
+import { LinkDashboard } from "@/components/LinkDashboard"
 import { IconDeviceLaptop } from "@tabler/icons-react"
 
 export const metadata: Metadata = {
@@ -38,7 +38,7 @@ export default function Page() {
 
         {/* 링크 목록 섹션 */}
         <section id="links-container" className="w-full">
-          <LinkList />
+          <LinkDashboard />
         </section>
 
         {/* 안내 힌트 (다크 모드) */}

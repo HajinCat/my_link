@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Card, CardContent } from "@/components/ui/card"
-import { dummyLinks, Link } from "@/data/links"
+import { Link } from "@/data/links"
 import {
   IconBrandInstagram,
   IconBrandYoutube,
@@ -25,7 +25,11 @@ const getLinkIcon = (title: string) => {
   return IconLink
 }
 
-export function LinkList() {
+interface LinkListProps {
+  links: Link[]
+}
+
+export function LinkList({ links }: LinkListProps) {
   const handleLinkClick = (link: Link) => {
     // 로드맵의 클릭 분석(Click Analytics)을 대비한 로깅 시스템
     console.log(
@@ -35,7 +39,7 @@ export function LinkList() {
 
   return (
     <div className="flex w-full flex-col gap-3.5">
-      {dummyLinks.map((link) => {
+      {links.map((link) => {
         const Icon = getLinkIcon(link.title)
         return (
           <a
