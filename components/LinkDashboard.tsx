@@ -2,6 +2,9 @@
 
 import * as React from "react"
 import { useState } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
 import { dummyLinks, Link } from "@/data/links"
 import { LinkList } from "@/components/LinkList"
 import { Button } from "@/components/ui/button"
@@ -15,62 +18,86 @@ import {
 } from "@/components/ui/dialog"
 import { IconPlus } from "@tabler/icons-react"
 
+// Zod 유효성 검사 스키마 정의
+const linkSchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(1, "링크 제목을 입력해주세요."),
+  url: z
+    .string()
+    .trim()
+    .min(1, "링크 URL을 입력해주세요.")
+    .transform((val) => {
+      // 프로토콜(http/https)이 포함되지 않은 경우 기본적으로 https:// 추가
+      if (!/^https?:\/\//i.test(val)) {
+        return `https://${val}`
+      }
+      return val
+    })
+    .refine((val) => {
+      try {
+        new URL(val)
+        return true
+      } catch (err) {
+        return false
+      }
+    }, "올바른 형식의 URL을 입력해주세요. (예: example.com)"),
+})
+
+type LinkFormValues = z.infer<typeof linkSchema>
+
 export function LinkDashboard() {
   const [links, setLinks] = useState<Link[]>(dummyLinks)
   const [open, setOpen] = useState(false)
-  const [title, setTitle] = useState("")
-  const [url, setUrl] = useState("")
-  const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
+  // React Hook Form 설정
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+  } = useForm<LinkFormValues>({
+    resolver: zodResolver(linkSchema),
+    defaultValues: {
+      title: "",
+      url: "",
+    },
+    mode: "onChange", // 입력 값 변경 시 실시간 검증을 진행해 에러 상태를 즉각 업데이트합니다.
+  })
 
-    // 유효성 검사 (빈 값 체크)
-    if (!title.trim()) {
-      setError("링크 제목을 입력해주세요.")
-      return
+  // 다이얼로그 열림/닫힘 상태 핸들러
+  const handleOpenChange = (isOpen: boolean) => {
+    setOpen(isOpen)
+    if (!isOpen) {
+      reset() // 닫힐 때 폼 초기화
     }
+  }
 
-    if (!url.trim()) {
-      setError("링크 URL을 입력해주세요.")
-      return
-    }
+  // 취소 버튼 핸들러
+  const handleCancel = () => {
+    reset()
+    setOpen(false)
+  }
 
-    let formattedUrl = url.trim()
-    // 프로토콜이 없는 경우 https:// 기본 추가
-    if (!/^https?:\/\//i.test(formattedUrl)) {
-      formattedUrl = `https://${formattedUrl}`
-    }
-
-    // URL 유효성 최종 검증
-    try {
-      new URL(formattedUrl)
-    } catch (err) {
-      setError("올바른 형식의 URL을 입력해주세요. (예: example.com)")
-      return
-    }
-
-    // 새 링크 객체 생성
+  // 폼 제출 완료 핸들러
+  const onSubmit = (data: LinkFormValues) => {
     const newLink: Link = {
       id: Date.now().toString(),
-      title: title.trim(),
-      url: formattedUrl,
+      title: data.title,
+      url: data.url, // Zod transform에 의해 포맷팅 완료된 URL
       clicks: 0,
     }
 
     setLinks((prev) => [...prev, newLink])
-
-    // 상태 초기화 및 닫기
-    setTitle("")
-    setUrl("")
+    reset()
     setOpen(false)
   }
 
   return (
     <div className="flex w-full flex-col gap-6">
       <div className="flex justify-end">
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
           <DialogTrigger
             render={
               <Button
@@ -91,7 +118,8 @@ export function LinkDashboard() {
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
+            <form onSubmit={handleSubmit(onSubmit)} className="mt-4 flex flex-col gap-4">
+              {/* 링크 제목 입력 필드 */}
               <div className="flex flex-col gap-1.5 text-left">
                 <label htmlFor="link-title" className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                   링크 제목
@@ -100,13 +128,21 @@ export function LinkDashboard() {
                   id="link-title"
                   type="text"
                   placeholder="예: GitHub, Blog, YouTube 등"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full rounded-none border border-border bg-background px-3 py-2 text-xs text-foreground placeholder-muted-foreground/60 outline-none transition-all focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary/40 dark:border-zinc-800 dark:bg-zinc-900/50"
-                  required
+                  {...register("title")}
+                  className={`w-full rounded-none border bg-background px-3 py-2 text-xs text-foreground placeholder-muted-foreground/60 outline-none transition-all focus-visible:ring-1 ${
+                    errors.title
+                      ? "border-destructive focus-visible:border-destructive/80 focus-visible:ring-destructive/20 dark:border-destructive/50 dark:focus-visible:ring-destructive/40"
+                      : "border-border focus-visible:border-primary focus-visible:ring-primary/40 dark:border-zinc-800 dark:bg-zinc-900/50"
+                  }`}
                 />
+                {errors.title && (
+                  <p className="text-[10.5px] font-medium text-destructive mt-0.5">
+                    {errors.title.message}
+                  </p>
+                )}
               </div>
 
+              {/* 링크 URL 입력 필드 */}
               <div className="flex flex-col gap-1.5 text-left">
                 <label htmlFor="link-url" className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                   링크 URL
@@ -115,30 +151,27 @@ export function LinkDashboard() {
                   id="link-url"
                   type="text"
                   placeholder="example.com"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  className="w-full rounded-none border border-border bg-background px-3 py-2 text-xs text-foreground placeholder-muted-foreground/60 outline-none transition-all focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary/40 dark:border-zinc-800 dark:bg-zinc-900/50"
-                  required
+                  {...register("url")}
+                  className={`w-full rounded-none border bg-background px-3 py-2 text-xs text-foreground placeholder-muted-foreground/60 outline-none transition-all focus-visible:ring-1 ${
+                    errors.url
+                      ? "border-destructive focus-visible:border-destructive/80 focus-visible:ring-destructive/20 dark:border-destructive/50 dark:focus-visible:ring-destructive/40"
+                      : "border-border focus-visible:border-primary focus-visible:ring-primary/40 dark:border-zinc-800 dark:bg-zinc-900/50"
+                  }`}
                 />
+                {errors.url && (
+                  <p className="text-[10.5px] font-medium text-destructive mt-0.5">
+                    {errors.url.message}
+                  </p>
+                )}
               </div>
 
-              {error && (
-                <p className="text-[11px] font-medium text-destructive text-left">
-                  {error}
-                </p>
-              )}
-
+              {/* 폼 하단 작업 버튼 */}
               <div className="mt-2 flex justify-end gap-2">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    setError(null)
-                    setTitle("")
-                    setUrl("")
-                    setOpen(false)
-                  }}
+                  onClick={handleCancel}
                   className="cursor-pointer rounded-none"
                 >
                   취소
