@@ -230,7 +230,7 @@ export function LinkDashboard() {
           <p className="text-xs font-medium text-muted-foreground animate-pulse">링크를 불러오는 중입니다...</p>
         </div>
       ) : (
-        <LinkList links={links} />
+        <LinkList links={links} onRefresh={fetchLinks} />
       )}
     </div>
   )
