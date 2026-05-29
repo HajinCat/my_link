@@ -1,14 +1,14 @@
 "use client"
 
 import * as React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { dummyLinks, Link } from "@/data/links"
+import { Link } from "@/data/links"
 import { LinkList } from "@/components/LinkList"
 import { db } from "@/lib/firebase"
-import { collection, addDoc } from "firebase/firestore"
+import { collection, addDoc, getDocs, query, orderBy } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -18,7 +18,7 @@ import {
   DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { IconPlus } from "@tabler/icons-react"
+import { IconPlus, IconLoader2 } from "@tabler/icons-react"
 
 // Zod 유효성 검사 스키마 정의
 const linkSchema = z.object({
@@ -50,8 +50,35 @@ const linkSchema = z.object({
 type LinkFormValues = z.infer<typeof linkSchema>
 
 export function LinkDashboard() {
-  const [links, setLinks] = useState<Link[]>(dummyLinks)
+  const [links, setLinks] = useState<Link[]>([])
   const [open, setOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+
+  const fetchLinks = async () => {
+    setIsLoading(true);
+    try {
+      const q = query(
+        collection(db, "users", "anonymous", "links"),
+        orderBy("createdAt", "desc")
+      );
+      const querySnapshot = await getDocs(q);
+      const fetchedLinks = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        title: doc.data().title,
+        url: doc.data().url,
+        clicks: doc.data().clicks || 0,
+      })) as Link[];
+      setLinks(fetchedLinks);
+    } catch (error) {
+      console.error("Error fetching links: ", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLinks();
+  }, []);
 
   // React Hook Form 설정
   const {
@@ -92,17 +119,12 @@ export function LinkDashboard() {
         createdAt: new Date().toISOString(),
       };
 
-      // Firestore의 user/anonymous/links 경로에 문서 추가
-      const docRef = await addDoc(collection(db, "user", "anonymous", "links"), linkData);
+      // Firestore의 users/anonymous/links 경로에 문서 추가
+      await addDoc(collection(db, "users", "anonymous", "links"), linkData);
 
-      const newLink: Link = {
-        id: docRef.id,
-        title: linkData.title,
-        url: linkData.url,
-        clicks: linkData.clicks,
-      }
+      // 데이터 갱신 (로딩 표시 활성화)
+      await fetchLinks();
 
-      setLinks((prev) => [...prev, newLink])
       reset()
       setOpen(false)
     } catch (error) {
@@ -202,7 +224,14 @@ export function LinkDashboard() {
         </Dialog>
       </div>
 
-      <LinkList links={links} />
+      {isLoading ? (
+        <div className="flex h-32 w-full flex-col items-center justify-center gap-3">
+          <IconLoader2 className="h-5 w-5 animate-spin text-primary/60" />
+          <p className="text-xs font-medium text-muted-foreground animate-pulse">링크를 불러오는 중입니다...</p>
+        </div>
+      ) : (
+        <LinkList links={links} />
+      )}
     </div>
   )
 }
