@@ -7,6 +7,8 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { dummyLinks, Link } from "@/data/links"
 import { LinkList } from "@/components/LinkList"
+import { db } from "@/lib/firebase"
+import { collection, addDoc } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -55,7 +57,7 @@ export function LinkDashboard() {
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isSubmitting },
     reset,
   } = useForm<LinkFormValues>({
     resolver: zodResolver(linkSchema),
@@ -81,17 +83,32 @@ export function LinkDashboard() {
   }
 
   // 폼 제출 완료 핸들러
-  const onSubmit = (data: LinkFormValues) => {
-    const newLink: Link = {
-      id: Date.now().toString(),
-      title: data.title,
-      url: data.url, // Zod transform에 의해 포맷팅 완료된 URL
-      clicks: 0,
-    }
+  const onSubmit = async (data: LinkFormValues) => {
+    try {
+      const linkData = {
+        title: data.title,
+        url: data.url, // Zod transform에 의해 포맷팅 완료된 URL
+        clicks: 0,
+        createdAt: new Date().toISOString(),
+      };
 
-    setLinks((prev) => [...prev, newLink])
-    reset()
-    setOpen(false)
+      // Firestore의 user/anonymous/links 경로에 문서 추가
+      const docRef = await addDoc(collection(db, "user", "anonymous", "links"), linkData);
+
+      const newLink: Link = {
+        id: docRef.id,
+        title: linkData.title,
+        url: linkData.url,
+        clicks: linkData.clicks,
+      }
+
+      setLinks((prev) => [...prev, newLink])
+      reset()
+      setOpen(false)
+    } catch (error) {
+      console.error("Error adding document: ", error);
+      alert("링크를 추가하는 중 오류가 발생했습니다.");
+    }
   }
 
   return (
@@ -176,8 +193,8 @@ export function LinkDashboard() {
                 >
                   취소
                 </Button>
-                <Button type="submit" size="sm" className="cursor-pointer rounded-none">
-                  추가하기
+                <Button type="submit" size="sm" disabled={isSubmitting} className="cursor-pointer rounded-none">
+                  {isSubmitting ? "추가 중..." : "추가하기"}
                 </Button>
               </div>
             </form>
